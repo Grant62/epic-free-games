@@ -1,0 +1,95 @@
+name: Epic Free Games Notify
+
+on:
+  schedule:
+    - cron: '0 14 * * 2,4,6'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Epic Free Games
+        run: |
+          cat > check_epic.py << 'EOF'
+import requests
+import json
+from datetime import datetime
+
+WEBHOOK = "${{ secrets.WEBHOOK_URL }}"
+
+def send_to_wework(content, msgtype="text"):
+    """发送消息到企业微信"""
+    if msgtype == "markdown":
+        data = {"msgtype": "markdown", "markdown": {"content": content}}
+    else:
+        data = {"msgtype": "text", "text": {"content": content}}
+    
+    try:
+        requests.post(WEBHOOK, json=data, timeout=10)
+        print("发送成功")
+    except Exception as e:
+        print(f"发送失败: {e}")
+
+def get_epic_free_games():
+    """获取Epic免费游戏"""
+    url = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
+    params = {'locale': 'zh-CN', 'country': 'CN'}
+    
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        data = resp.json()
+        
+        free_games = []
+        for game in data.get('data', {}).get('Catalog', {}).get('searchStore', {}).get('elements', []):
+            promotions = game.get('promotions')
+            if not promotions:
+                continue
+            
+            for promo in promotions.get('promotionalOffers', []):
+                for offer in promo.get('promotionalOffers', []):
+                    if offer.get('discountSetting', {}).get('discountPercentage') == 0:
+                        free_games.append({
+                            'title': game.get('title'),
+                            'url': f"https://store.epicgames.com/zh-CN/p/{game.get('productSlug', game.get('id'))}",
+                            'end_date': offer.get('endDate', '')[:10]
+                        })
+                        break
+                if free_games and free_games[-1]['title'] == game.get('title'):
+                    break
+        
+        return free_games
+    except Exception as e:
+        print(f"获取失败: {e}")
+        return None
+
+def main():
+    send_to_wework("🟢 Epic免费游戏监控已启动")
+    
+    games = get_epic_free_games()
+    
+    if games is None:
+        send_to_wework("❌ 获取游戏列表失败，请检查网络")
+        return
+    
+    if not games:
+        send_to_wework("📭 当前暂无免费游戏，请耐心等待周四更新~")
+        return
+    
+    msg = "## 🎮 Epic 免费游戏提醒\n\n"
+    for i, game in enumerate(games, 1):
+        msg += f"### {i}. {game['title']}\n"
+        msg += f"📅 截止：{game['end_date']}\n"
+        msg += f"🔗 [点击领取]({game['url']})\n\n"
+    
+    msg += "\n---\n> 💡 每周四晚上11点更新，记得领取！"
+    
+    send_to_wework(msg, "markdown")
+    
+    titles = "、".join([g['title'] for g in games])
+    send_to_wework(f"🎉 发现免费游戏：{titles}")
+
+if __name__ == "__main__":
+    main()
+EOF
+          python check_epic.py
