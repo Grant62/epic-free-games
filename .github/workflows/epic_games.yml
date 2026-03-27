@@ -1,301 +1,91 @@
-name: 每日游戏新闻推送（游民星空+机核网）
+name: Epic Free Games Notify
 on:
   schedule:
-    # 每天下午6点推送（北京时间 UTC+8）
-    - cron: '0 10 * * *'
+    - cron: '0 14 * * 2,4,6'
   workflow_dispatch:
 jobs:
-  send-news:
+  notify:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: 设置Python
-        uses: actions/setup-python@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
       
-      - name: 安装依赖
-        run: pip install requests beautifulsoup4
+      - name: Install dependencies
+        run: pip install requests
       
-      - name: 运行新闻机器人
+      - name: Check Epic Free Games
         env:
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL2 }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
-          python << 'EOF'
+          python << 'PYEOF'
           import requests
           import json
-          import time
-          from datetime import datetime
-          import hashlib
           import os
-          from bs4 import BeautifulSoup
-          import xml.etree.ElementTree as ET
           
-          WEBHOOK_URL = os.environ['WEBHOOK_URL']
+          WEBHOOK = os.environ.get('WEBHOOK_URL')
           
-          class GameNewsBot:
-              def __init__(self, webhook):
-                  self.webhook = webhook
-                  self.sent_news = set()
-                  
-                  # 加载已推送记录
-                  try:
-                      with open('sent_history.json', 'r') as f:
-                          self.sent_news = set(json.load(f))
-                  except:
-                      pass
-              
-              def get_gamersky_news(self):
-                  """抓取游民星空新闻（网页抓取）"""
-                  url = "https://www.gamersky.com/news/"
-                  headers = {
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                  }
-                  
-                  block_keywords = [
-                      '手游', '王者荣耀', '和平精英', '原神手游', '明日方舟', 
-                      '阴阳师', '崩坏', '碧蓝航线', 'FGO', '第五人格',
-                      '部落冲突', '皇室战争', '金铲铲', '蛋仔派对'
-                  ]
-                  
-                  try:
-                      print("正在抓取游民星空...")
-                      response = requests.get(url, headers=headers, timeout=10)
-                      response.encoding = 'utf-8'
-                      soup = BeautifulSoup(response.text, 'html.parser')
-                      
-                      news_list = []
-                      # 游民星空新闻列表的选择器
-                      news_items = soup.select('.con li')[:15]  # 取前15条
-                      
-                      for item in news_items:
-                          try:
-                              title_elem = item.select_one('.tit a')
-                              if not title_elem:
-                                  continue
-                                  
-                              title = title_elem.text.strip()
-                              link = title_elem.get('href', '')
-                              
-                              # 过滤手游
-                              is_mobile_game = False
-                              for kw in block_keywords:
-                                  if kw in title:
-                                      is_mobile_game = True
-                                      break
-                              
-                              if is_mobile_game:
-                                  continue
-                              
-                              # 获取摘要
-                              desc_elem = item.select_one('.txt')
-                              description = desc_elem.text.strip() if desc_elem else ""
-                              
-                              news_id = hashlib.md5(link.encode()).hexdigest()
-                              
-                              if news_id not in self.sent_news:
-                                  news_list.append({
-                                      'id': news_id,
-                                      'title': title,
-                                      'link': link,
-                                      'summary': description[:150] if description else "",
-                                      'pub_date': datetime.now().strftime('%Y-%m-%d'),
-                                      'source': '游民星空'
+          def send_to_wework(content, msgtype="text"):
+              if msgtype == "markdown":
+                  data = {"msgtype": "markdown", "markdown": {"content": content}}
+              else:
+                  data = {"msgtype": "text", "text": {"content": content}}
+              try:
+                  requests.post(WEBHOOK, json=data, timeout=10)
+                  print("发送成功")
+              except Exception as e:
+                  print(f"发送失败: {e}")
+          
+          def get_epic_free_games():
+              url = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
+              params = {'locale': 'zh-CN', 'country': 'CN'}
+              try:
+                  resp = requests.get(url, params=params, timeout=10)
+                  data = resp.json()
+                  free_games = []
+                  for game in data.get('data', {}).get('Catalog', {}).get('searchStore', {}).get('elements', []):
+                      promotions = game.get('promotions')
+                      if not promotions:
+                          continue
+                      for promo in promotions.get('promotionalOffers', []):
+                          for offer in promo.get('promotionalOffers', []):
+                              if offer.get('discountSetting', {}).get('discountPercentage') == 0:
+                                  free_games.append({
+                                      'title': game.get('title'),
+                                      'url': f"https://store.epicgames.com/zh-CN/p/{game.get('productSlug', game.get('id'))}",
+                                      'end_date': offer.get('endDate', '')[:10]
                                   })
-                          except Exception as e:
-                              print(f"解析单条新闻失败: {e}")
-                              continue
-                      
-                      print(f"游民星空抓取到 {len(news_list)} 条新新闻")
-                      return news_list
-                      
-                  except Exception as e:
-                      print(f"游民星空抓取失败: {e}")
-                      return []
-              
-              def get_gcores_news(self):
-                  """获取机核网新闻（RSS）"""
-                  rss_url = "https://www.gcores.com/rss"
-                  headers = {
-                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                  }
-                  
-                  block_keywords = [
-                      '手游', '王者荣耀', '和平精英', '原神手游', '明日方舟', 
-                      '阴阳师', '崩坏', '碧蓝航线', 'FGO', '第五人格',
-                      '部落冲突', '皇室战争', '金铲铲', '蛋仔派对'
-                  ]
-                  
-                  try:
-                      print("正在抓取机核网...")
-                      response = requests.get(rss_url, headers=headers, timeout=10)
-                      print(f"响应状态码: {response.status_code}")
-                      print(f"内容长度: {len(response.text)}")
-                      print(f"内容前200字符: {response.text[:200]}")
-                      response.encoding = 'utf-8'
-                      root = ET.fromstring(response.text)
-                      
-                      news_list = []
-                      items = root.findall('.//item')
-                      
-                      for item in items[:15]:  # 取前15条
-                          title = item.find('title').text
-                          link = item.find('link').text
-                          description = ""
-                          
-                          # 尝试获取描述
-                          desc_elem = item.find('description')
-                          if desc_elem is not None and desc_elem.text:
-                              # 清理HTML标签
-                              soup = BeautifulSoup(desc_elem.text, 'html.parser')
-                              description = soup.get_text()[:200]
-                          
-                          pub_date = item.find('pubDate').text if item.find('pubDate') is not None else ""
-                          
-                          # 过滤手游
-                          is_mobile_game = False
-                          for kw in block_keywords:
-                              if kw in title:
-                                  is_mobile_game = True
                                   break
-                          
-                          if is_mobile_game:
-                              continue
-                          
-                          news_id = hashlib.md5(link.encode()).hexdigest()
-                          
-                          if news_id not in self.sent_news:
-                              news_list.append({
-                                  'id': news_id,
-                                  'title': title,
-                                  'link': link,
-                                  'summary': description[:150] if description else "",
-                                  'pub_date': pub_date,
-                                  'source': '机核网'
-                              })
-                      
-                      print(f"机核网抓取到 {len(news_list)} 条新新闻")
-                      return news_list
-                      
-                  except Exception as e:
-                      print(f"机核网抓取失败: {e}")
-                      import traceback
-                      traceback.print_exc()
-                      return []
-              
-              def merge_and_deduplicate(self, list1, list2):
-                  """合并两个新闻列表并去重"""
-                  # 使用链接去重
-                  seen_links = set()
-                  merged = []
-                  
-                  for news in list1 + list2:
-                      if news['link'] not in seen_links:
-                          seen_links.add(news['link'])
-                          merged.append(news)
-                  
-                  # 按来源排序，混合展示
-                  return merged[:20]  # 最多20条
-              
-              def send_message(self, content, msg_type="markdown"):
-                  """发送到企业微信"""
-                  if msg_type == "markdown":
-                      data = {
-                          "msgtype": "markdown",
-                          "markdown": {
-                              "content": content
-                          }
-                      }
-                  else:
-                      data = {
-                          "msgtype": "text",
-                          "text": {
-                              "content": content
-                          }
-                      }
-                  
-                  try:
-                      response = requests.post(self.webhook, json=data, timeout=10)
-                      return response.status_code == 200
-                  except Exception as e:
-                      print(f"发送失败: {e}")
-                      return False
-              
-              def format_news(self, news_list):
-                  """格式化新闻为Markdown"""
-                  if not news_list:
-                      return None
-                  
-                  today = datetime.now().strftime('%Y年%m月%d日')
-                  
-                  msg = f"## 🎮 每日游戏新闻速递\n📅 {today}\n"
-                  
-                  # 按来源分组
-                  gamersky_news = [n for n in news_list if n['source'] == '游民星空']
-                  gcores_news = [n for n in news_list if n['source'] == '机核网']
-                  
-                  if gamersky_news:
-                      msg += "\n### 📰 游民星空\n"
-                      for i, news in enumerate(gamersky_news[:5], 1):
-                          msg += f"{i}. [{news['title']}]({news['link']})\n"
-                          if news['summary']:
-                              msg += f"   > {news['summary'][:60]}...\n"
-                  
-                  if gcores_news:
-                      msg += "\n### 🎮 机核网\n"
-                      for i, news in enumerate(gcores_news[:5], 1):
-                          msg += f"{i}. [{news['title']}]({news['link']})\n"
-                          if news['summary']:
-                              msg += f"   > {news['summary'][:60]}...\n"
-                  
-                  msg += "\n> 💡 每日自动推送，已过滤手游内容"
-                  
-                  return msg
-              
-              def save_sent(self, news_list):
-                  """保存已推送记录"""
-                  for news in news_list:
-                      self.sent_news.add(news['id'])
-                  
-                  # 只保留最近500条
-                  if len(self.sent_news) > 500:
-                      self.sent_news = set(list(self.sent_news)[-500:])
-                  
-                  with open('sent_history.json', 'w') as f:
-                      json.dump(list(self.sent_news), f)
-              
-              def run(self):
-                  """执行推送"""
-                  print(f"[{datetime.now()}] 开始获取新闻...")
-                  
-                  # 获取两个来源的新闻
-                  gamersky_news = self.get_gamersky_news()
-                  gcores_news = self.get_gcores_news()
-                  
-                  # 合并去重
-                  news_list = self.merge_and_deduplicate(gamersky_news, gcores_news)
-                  
-                  if not news_list:
-                      print("没有新新闻")
-                      return
-                  
-                  print(f"共计 {len(news_list)} 条新新闻（已去重）")
-                  
-                  message = self.format_news(news_list)
-                  if message:
-                      if self.send_message(message):
-                          self.save_sent(news_list)
-                          print(f"推送成功！共 {len(news_list)} 条")
-                      else:
-                          print("推送失败")
+                          if free_games and free_games[-1]['title'] == game.get('title'):
+                              break
+                  return free_games
+              except Exception as e:
+                  print(f"获取失败: {e}")
+                  return None
+          
+          def main():
+              send_to_wework("🟢 Epic免费游戏监控已启动")
+              games = get_epic_free_games()
+              if games is None:
+                  send_to_wework("❌ 获取游戏列表失败，请检查网络")
+                  return
+              if not games:
+                  send_to_wework("📭 当前暂无免费游戏，请耐心等待周四更新~")
+                  return
+              msg = "## 🎮 Epic 免费游戏提醒\n\n"
+              for i, game in enumerate(games, 1):
+                  msg += f"### {i}. {game['title']}\n"
+                  msg += f"📅 截止：{game['end_date']}\n"
+                  msg += f"🔗 [点击领取]({game['url']})\n\n"
+              msg += "\n---\n> 💡 每周四晚上11点更新，记得领取！"
+              send_to_wework(msg, "markdown")
+              titles = "、".join([g['title'] for g in games])
+              send_to_wework(f"🎉 发现免费游戏：{titles}")
+          
           if __name__ == "__main__":
-              bot = GameNewsBot(WEBHOOK_URL)
-              bot.run()
-          EOF
-      
-      - name: 保存推送记录
-        uses: actions/upload-artifact@v4
-        with:
-          name: sent-history
-          path: sent_history.json
-          retention-days: 30
+              main()
+          PYEOF
