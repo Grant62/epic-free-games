@@ -1,0 +1,26 @@
+name: 每日游民星空新闻推送
+
+on:
+  schedule:
+    # 每天下午6点推送（北京时间）
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  send-news:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+      
+      - name: 设置Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: 运行新闻机器人
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: |
+          python gamersky_bot.py
