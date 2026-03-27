@@ -5,7 +5,8 @@ from datetime import datetime
 import hashlib
 
 # ========== 在这里填你的Webhook地址 ==========
-WEBHOOK_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=92500f6c-6c0e-4813-93c5-a934c136a921"
+import os
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=你的key")
 # ==========================================
 
 class GamerskyNewsBot:
