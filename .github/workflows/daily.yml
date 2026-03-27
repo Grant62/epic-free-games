@@ -167,7 +167,7 @@ jobs:
           EOF
       
       - name: 保存推送记录
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sent-history
           path: sent_history.json
