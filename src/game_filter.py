@@ -1,100 +1,92 @@
+import re
 from datetime import datetime
-from config.settings import MIN_REVIEW_COUNT, MIN_REVIEW_SCORE
-from src.quality_calculator import QualityCalculator
+from config.settings import (
+    MIN_ORIGINAL_PRICE, MIN_DISCOUNT_PERCENT, 
+    MIN_REVIEW_COUNT, MIN_REVIEW_SCORE, MAX_GAMES_TO_SHOW
+)
 
 class GameFilter:
-    def __init__(self):
-        self.calculator = QualityCalculator()
+    """游戏筛选器 - 按热度和好评率排序"""
     
-    def extract_discount_games(self, featured_data):
-        """提取所有打折的游戏，不限制折扣力度"""
-        games = []
-        if not featured_data:
-            return games
-        
-        # 从所有分类中提取
-        categories = ["specials", "top_sellers", "new_releases", "coming_soon"]
-        seen_ids = set()
-        
-        for category in categories:
-            if category not in featured_data:
-                continue
-            cat_data = featured_data[category]
-            if "items" not in cat_data:
-                continue
-            
-            print(f"Checking category '{category}': {len(cat_data['items'])} items")
-            
-            for item in cat_data["items"]:
-                appid = item.get("id")
-                if not appid or appid in seen_ids:
-                    continue
-                
-                discount_percent = item.get("discount_percent", 0)
-                original_price = item.get("original_price", 0)
-                
-                # 只要有折扣就提取（不限制折扣力度）
-                if discount_percent > 0 and original_price > 0:
-                    seen_ids.add(appid)
-                    games.append({
-                        "appid": appid,
-                        "name": item.get("name"),
-                        "discount_percent": discount_percent,
-                        "original_price": original_price,
-                        "final_price": item.get("final_price", 0),
-                        "header_image": item.get("header_image", ""),
-                        "discount_expiration": item.get("discount_expiration", 0),
-                    })
-        
-        print(f"Total extracted: {len(games)} discounted games from all categories")
-        return games
-    
-    def filter_by_quality(self, games, details):
-        """按质量筛选：好评率>=75%且评测数>=500"""
+    def filter_games(self, games: list, details: dict) -> tuple:
+        """
+        筛选并排序游戏
+        返回: (免费游戏列表, 折扣游戏列表)
+        """
         qualified = []
+        
         for game in games:
             appid = game["appid"]
             game_detail = details.get(appid, {})
-            quality_info = self.calculator.calculate_total_score(game_detail)
             
-            review_score = quality_info["details"]["review_score_pct"]
-            review_count = quality_info["details"]["total_reviews"]
+            # 获取基本信息
+            original_price = game.get("original_price", 0)
+            discount_percent = game.get("discount_percent", 0)
             
-            # 硬性门槛：好评率>=75% 且 评测数>=500
-            if review_score and review_score >= MIN_REVIEW_SCORE and review_count >= MIN_REVIEW_COUNT:
-                game["review_score"] = review_score
-                game["review_count"] = review_count
-                game["quality_info"] = quality_info
-                qualified.append(game)
+            # 检查基本条件
+            if original_price < MIN_ORIGINAL_PRICE * 100:
+                continue
+            if discount_percent < MIN_DISCOUNT_PERCENT:
+                continue
+            
+            # 获取评价信息
+            reviews = game_detail.get("reviews", {})
+            review_summary = reviews.get("review_summary", "")
+            
+            # 解析好评率
+            review_score = None
+            if review_summary:
+                match = re.search(r'(\d+)%', review_summary)
+                if match:
+                    review_score = int(match.group(1))
+            
+            # 解析评测数
+            total_reviews = 0
+            if review_summary:
+                match = re.search(r'([\d,]+) user reviews', review_summary)
+                if match:
+                    total_reviews = int(match.group(1).replace(',', ''))
+            else:
+                recommendations = game_detail.get("recommendations", {})
+                total_reviews = recommendations.get("total", 0)
+            
+            # 检查评价门槛
+            if not review_score or review_score < MIN_REVIEW_SCORE:
+                continue
+            if total_reviews < MIN_REVIEW_COUNT:
+                continue
+            
+            # 计算热度分数（评测数 * 好评率）
+            heat_score = total_reviews * (review_score / 100)
+            
+            # 保存筛选结果
+            game["review_score"] = review_score
+            game["review_count"] = total_reviews
+            game["heat_score"] = heat_score
+            game["final_price"] = game.get("final_price", int(original_price * (100 - discount_percent) / 100))
+            
+            qualified.append(game)
         
-        # 按折扣力度排序（折扣大的在前）
-        qualified.sort(key=lambda x: x["discount_percent"], reverse=True)
+        print(f"通过筛选: {len(qualified)}/{len(games)} 个游戏")
         
-        # 分离限时免费和普通折扣
-        free_games = [g for g in qualified if g["discount_percent"] == 100]
-        premium_deals = [g for g in qualified if g["discount_percent"] < 100]
+        # 按热度排序（评测数 * 好评率）
+        qualified.sort(key=lambda x: (x["heat_score"], x["discount_percent"]), reverse=True)
         
-        print(f"Quality filter: {len(free_games)} free, {len(premium_deals)} deals (total {len(qualified)})")
+        # 分离免费游戏和折扣游戏
+        free_games = [g for g in qualified if g["discount_percent"] == 100][:MAX_GAMES_TO_SHOW]
+        premium_deals = [g for g in qualified if g["discount_percent"] < 100][:MAX_GAMES_TO_SHOW]
+        
+        print(f"结果: {len(free_games)} 个免费游戏, {len(premium_deals)} 个折扣游戏")
         return free_games, premium_deals
     
-    def format_price(self, price_cents):
+    def format_price(self, price_cents: int) -> str:
+        """格式化价格"""
         if price_cents == 0:
-            return "Free"
-        return f"${price_cents / 100:.2f}"
+            return "免费"
+        return f"¥{price_cents / 100:.0f}"
     
-    def format_expiration(self, timestamp):
-        if not timestamp:
-            return "Limited time"
-        try:
-            dt = datetime.fromtimestamp(timestamp)
-            now = datetime.now()
-            delta = dt - now
-            if delta.days > 0:
-                return f"{delta.days} days left"
-            elif delta.seconds > 3600:
-                hours = delta.seconds // 3600
-                return f"{hours} hours left"
-            else:
-                return "Ending soon"
-        except:
-            return "Limited time"
+    def format_number(self, num: int) -> str:
+        """格式化数字"""
+        if num >= 10000:
+            return f"{num / 10000:.1f}万"
+        return str(num)

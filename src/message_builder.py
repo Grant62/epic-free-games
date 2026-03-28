@@ -1,70 +1,88 @@
 from datetime import datetime
-from config.settings import MAX_GAMES_PER_CATEGORY
+from config.settings import MAX_GAMES_TO_SHOW
 
 class MessageBuilder:
-    def build_message(self, free_games, premium_deals, total_checked):
+    """消息构建器"""
+    
+    def build_message(self, free_games: list, premium_deals: list, total_checked: int) -> str:
+        """构建推送消息"""
         lines = []
-        today = datetime.now().strftime("%m/%d")
-        lines.append("Steam Daily Deals - " + today)
+        
+        # 标题
+        today = datetime.now().strftime("%m月%d日")
+        lines.append(f"🎮 Steam热门游戏折扣 - {today}")
         lines.append("")
         
+        # 免费游戏部分
         if free_games:
-            lines.append("=========================")
-            lines.append("FREE GAMES (Score>=75%, Reviews>=500)")
-            lines.append("=========================")
-            lines.append("")
-            for i, game in enumerate(free_games[:MAX_GAMES_PER_CATEGORY], 1):
+            lines.append("🔥 限时免费领取")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            for i, game in enumerate(free_games[:MAX_GAMES_TO_SHOW], 1):
                 lines.extend(self._format_game(game, i, is_free=True))
                 lines.append("")
         
+        # 折扣游戏部分
         if premium_deals:
-            lines.append("=========================")
-            lines.append("DISCOUNTED GAMES (Score>=75%, Reviews>=500)")
-            lines.append("=========================")
-            lines.append("")
-            for i, game in enumerate(premium_deals[:MAX_GAMES_PER_CATEGORY], 1):
+            lines.append(f"💎 热门折扣游戏 (前{min(len(premium_deals), MAX_GAMES_TO_SHOW)}款)")
+            lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+            for i, game in enumerate(premium_deals[:MAX_GAMES_TO_SHOW], 1):
                 lines.extend(self._format_game(game, i, is_free=False))
                 lines.append("")
         
+        # 无结果提示
         if not free_games and not premium_deals:
-            lines.append("No games meet criteria today")
+            lines.append("😔 今日暂无符合条件的热门游戏")
             lines.append("")
-            lines.append("Filter: Score>=75% | Reviews>=500 (Any discount)")
+            lines.append("筛选条件:")
+            lines.append("• 原价 ≥ ¥40")
+            lines.append("• 折扣 ≥ 25%")
+            lines.append("• 好评率 ≥ 80%")
+            lines.append("• 评测数 ≥ 1000")
             lines.append("")
         
-        lines.append("=========================")
-        lines.append("Checked: " + str(total_checked) + " games | Found: " + str(len(free_games) + len(premium_deals)) + " games")
-        lines.append("https://store.steampowered.com/specials")
+        # 统计信息
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"📊 爬取 {total_checked} 个游戏 | 筛选出 {len(free_games) + len(premium_deals)} 款精品")
+        lines.append(f"🎯 排序: 热度(评测数×好评率) > 折扣力度")
+        lines.append("")
+        lines.append("👉 查看更多: https://store.steampowered.com/specials")
         
         return "\n".join(lines)
     
-    def _format_game(self, game, index, is_free=False):
+    def _format_game(self, game: dict, index: int, is_free: bool = False) -> list:
+        """格式化单个游戏信息"""
         lines = []
+        
         name = game["name"]
-        original_price = game.get("original_price", 0)
-        final_price = game.get("final_price", 0)
+        original_price = game["original_price"]
+        final_price = game["final_price"]
         discount = game["discount_percent"]
-        review_score = game.get("review_score", 0)
-        review_count = game.get("review_count", 0)
+        review_score = game["review_score"]
+        review_count = game["review_count"]
         appid = game["appid"]
         
-        from src.game_filter import GameFilter
-        expiration = GameFilter().format_expiration(game.get("discount_expiration", 0))
-        
+        # 游戏标题行
         if is_free:
-            price_str = "$" + str(int(original_price / 100)) + " -> FREE"
+            lines.append(f"{index}. 🎁 {name}")
         else:
-            price_str = "$" + str(int(original_price / 100)) + " -> $" + str(int(final_price / 100)) + " (-" + str(discount) + "%)"
+            lines.append(f"{index}. 🎮 {name}")
         
-        lines.append(str(index) + ". " + name)
-        lines.append("   Reviews: " + str(review_score) + "% | Count: " + self._format_number(review_count))
-        lines.append("   Price: " + price_str)
-        lines.append("   Expires: " + expiration)
-        lines.append("   Link: https://store.steampowered.com/app/" + str(appid))
+        # 价格和折扣
+        if is_free:
+            lines.append(f"   💰 ¥{original_price/100:.0f} → **免费** (-100%)")
+        else:
+            lines.append(f"   💰 ¥{original_price/100:.0f} → ¥{final_price/100:.0f} (-{discount}%)")
+        
+        # 评价信息
+        lines.append(f"   ⭐ 好评率: {review_score}% | 评测数: {self._format_number(review_count)}")
+        
+        # 链接
+        lines.append(f"   🔗 https://store.steampowered.com/app/{appid}")
+        
         return lines
     
-    @staticmethod
-    def _format_number(num):
-        if num >= 1000:
-            return str(int(num/1000)) + "k"
+    def _format_number(self, num: int) -> str:
+        """格式化数字"""
+        if num >= 10000:
+            return f"{num / 10000:.1f}万"
         return str(num)
