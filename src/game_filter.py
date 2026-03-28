@@ -1,5 +1,5 @@
 from datetime import datetime
-from config.settings import QUALITY_THRESHOLD, MIN_DISCOUNT_PERCENT, MIN_ORIGINAL_PRICE
+from config.settings import MIN_DISCOUNT_PERCENT, MIN_REVIEW_COUNT, MIN_REVIEW_SCORE
 from src.quality_calculator import QualityCalculator
 
 class GameFilter:
@@ -7,56 +7,80 @@ class GameFilter:
         self.calculator = QualityCalculator()
     
     def extract_discount_games(self, featured_data):
+        """从所有分类中提取折扣>=25%的游戏"""
         games = []
-        if not featured_data or "specials" not in featured_data:
+        if not featured_data:
             return games
-        specials = featured_data["specials"]
-        if "items" not in specials:
-            return games
-        for item in specials["items"]:
-            if not item.get("discounted", False):
+        
+        # 从所有分类中提取，不只是specials
+        categories = ["specials", "top_sellers", "new_releases", "coming_soon"]
+        seen_ids = set()
+        
+        for category in categories:
+            if category not in featured_data:
                 continue
-            discount_percent = item.get("discount_percent", 0)
-            original_price = item.get("original_price", 0)
-            if discount_percent >= MIN_DISCOUNT_PERCENT and original_price >= MIN_ORIGINAL_PRICE * 100:
-                games.append({
-                    "appid": item.get("id"),
-                    "name": item.get("name"),
-                    "discount_percent": discount_percent,
-                    "original_price": original_price,
-                    "final_price": item.get("final_price", 0),
-                    "header_image": item.get("header_image", ""),
-                    "discount_expiration": item.get("discount_expiration", 0),
-                })
-        print(f"Extracted {len(games)} discounted games from Featured API")
+            cat_data = featured_data[category]
+            if "items" not in cat_data:
+                continue
+            
+            print(f"Checking category '{category}': {len(cat_data['items'])} items")
+            
+            for item in cat_data["items"]:
+                appid = item.get("id")
+                if not appid or appid in seen_ids:
+                    continue
+                
+                discount_percent = item.get("discount_percent", 0)
+                original_price = item.get("original_price", 0)
+                
+                # 只保留真正打折的游戏（有原价且现价低于原价）
+                if discount_percent > 0 and original_price > 0:
+                    seen_ids.add(appid)
+                    games.append({
+                        "appid": appid,
+                        "name": item.get("name"),
+                        "discount_percent": discount_percent,
+                        "original_price": original_price,
+                        "final_price": item.get("final_price", 0),
+                        "header_image": item.get("header_image", ""),
+                        "discount_expiration": item.get("discount_expiration", 0),
+                    })
+        
+        print(f"Total extracted: {len(games)} discounted games from all categories")
         return games
     
-    def categorize_games(self, games, details):
-        free_games = []
-        premium_deals = []
+    def filter_by_quality(self, games, details):
+        """按质量筛选：好评率>=80%且评测数>=1000"""
+        qualified = []
         for game in games:
             appid = game["appid"]
             game_detail = details.get(appid, {})
             quality_info = self.calculator.calculate_total_score(game_detail)
-            total_score = quality_info["total_score"]
-            game["quality_score"] = total_score
-            game["quality_breakdown"] = quality_info["breakdown"]
-            game["quality_details"] = quality_info["details"]
-            if game["discount_percent"] == 100:
-                if total_score >= QUALITY_THRESHOLD:
-                    free_games.append(game)
-            else:
-                if total_score >= QUALITY_THRESHOLD:
-                    premium_deals.append(game)
-        free_games.sort(key=lambda x: x["quality_score"], reverse=True)
-        premium_deals.sort(key=lambda x: x["quality_score"], reverse=True)
-        print(f"Filter result: {len(free_games)} free games, {len(premium_deals)} premium deals")
+            
+            review_score = quality_info["details"]["review_score_pct"]
+            review_count = quality_info["details"]["total_reviews"]
+            
+            # 硬性门槛：好评率>=80% 且 评测数>=1000
+            if review_score and review_score >= MIN_REVIEW_SCORE and review_count >= MIN_REVIEW_COUNT:
+                game["review_score"] = review_score
+                game["review_count"] = review_count
+                game["quality_info"] = quality_info
+                qualified.append(game)
+        
+        # 按折扣力度排序（折扣大的在前）
+        qualified.sort(key=lambda x: x["discount_percent"], reverse=True)
+        
+        # 分离限时免费和普通折扣
+        free_games = [g for g in qualified if g["discount_percent"] == 100]
+        premium_deals = [g for g in qualified if g["discount_percent"] < 100]
+        
+        print(f"Quality filter: {len(free_games)} free, {len(premium_deals)} deals (total {len(qualified)})")
         return free_games, premium_deals
     
     def format_price(self, price_cents):
         if price_cents == 0:
             return "Free"
-        return f"Y{price_cents / 100:.0f}"
+        return f"${price_cents / 100:.2f}"
     
     def format_expiration(self, timestamp):
         if not timestamp:
