@@ -1,12 +1,14 @@
-QUALITY_THRESHOLD = 80
-MIN_DISCOUNT_PERCENT = 50
-MIN_ORIGINAL_PRICE = 50
-MAX_GAMES_PER_CATEGORY = 5
+# Steam游戏推送配置
 
-REVIEW_SCORE_LEVELS = {95: 40, 90: 35, 85: 30, 80: 20}
-REVIEW_COUNT_LEVELS = {500000: 30, 200000: 25, 100000: 20, 50000: 15, 10000: 10, 1000: 5}
-PRICE_LEVELS = {200: 20, 150: 15, 100: 10, 50: 5}
+# 门槛设置
+MIN_DISCOUNT_PERCENT = 25  # 折扣>=25%
+MIN_REVIEW_COUNT = 1000  # 评测数>=1000
+MIN_REVIEW_SCORE = 80  # 好评率>=80%
 
+# 推送设置
+MAX_GAMES_PER_CATEGORY = 10  # 最多推送10个
+
+# Steam API配置
 STEAM_API = {
     "featured_url": "https://store.steampowered.com/api/featuredcategories/",
     "appdetails_url": "https://store.steampowered.com/api/appdetails",
