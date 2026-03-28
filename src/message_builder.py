@@ -4,7 +4,7 @@ from config.settings import MAX_GAMES_TO_SHOW
 class MessageBuilder:
     """消息构建器"""
     
-    def build_message(self, free_games: list, premium_deals: list, total_checked: int) -> str:
+    def build_message(self, free_games, premium_deals, total_checked):
         """构建推送消息"""
         lines = []
         
@@ -33,24 +33,23 @@ class MessageBuilder:
         if not free_games and not premium_deals:
             lines.append("😔 今日暂无符合条件的热门游戏")
             lines.append("")
-            lines.append("筛选条件:")
-            lines.append("• 原价 ≥ ¥40")
-            lines.append("• 折扣 ≥ 25%")
-            lines.append("• 好评率 ≥ 80%")
-            lines.append("• 评测数 ≥ 1000")
+            lines.append("📋 筛选条件:")
+            lines.append("   • 原价 ≥ ¥30")
+            lines.append("   • 好评率 ≥ 80%")
+            lines.append("   • 评测数 ≥ 1000")
             lines.append("")
         
         # 统计信息
         lines.append("━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append(f"📊 爬取 {total_checked} 个游戏 | 筛选出 {len(free_games) + len(premium_deals)} 款精品")
-        lines.append(f"🎯 排序: 热度(评测数×好评率) > 折扣力度")
+        lines.append(f"📊 检查 {total_checked} 个游戏 | 筛选出 {len(free_games) + len(premium_deals)} 款精品")
+        lines.append(f"🎯 排序: 热度(评测数×好评率)")
         lines.append("")
         lines.append("👉 查看更多: https://store.steampowered.com/specials")
         
         return "\n".join(lines)
     
-    def _format_game(self, game: dict, index: int, is_free: bool = False) -> list:
-        """格式化单个游戏信息"""
+    def _format_game(self, game, index, is_free=False):
+        """格式化单个游戏"""
         lines = []
         
         name = game["name"]
@@ -61,28 +60,24 @@ class MessageBuilder:
         review_count = game["review_count"]
         appid = game["appid"]
         
-        # 游戏标题行
+        # 游戏标题
         if is_free:
             lines.append(f"{index}. 🎁 {name}")
+            lines.append(f"   💰 ¥{int(original_price/100)} → **免费** ⭐")
         else:
             lines.append(f"{index}. 🎮 {name}")
-        
-        # 价格和折扣
-        if is_free:
-            lines.append(f"   💰 ¥{original_price/100:.0f} → **免费** (-100%)")
-        else:
-            lines.append(f"   💰 ¥{original_price/100:.0f} → ¥{final_price/100:.0f} (-{discount}%)")
+            lines.append(f"   💰 ¥{int(original_price/100)} → ¥{int(final_price/100)} (-{discount}%)")
         
         # 评价信息
-        lines.append(f"   ⭐ 好评率: {review_score}% | 评测数: {self._format_number(review_count)}")
+        lines.append(f"   ⭐ 好评率: {review_score}% | 评测: {self._format_number(review_count)}")
         
         # 链接
         lines.append(f"   🔗 https://store.steampowered.com/app/{appid}")
         
         return lines
     
-    def _format_number(self, num: int) -> str:
+    def _format_number(self, num):
         """格式化数字"""
         if num >= 10000:
-            return f"{num / 10000:.1f}万"
+            return f"{num/10000:.1f}万"
         return str(num)
