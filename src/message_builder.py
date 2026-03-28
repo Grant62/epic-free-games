@@ -5,7 +5,7 @@ class MessageBuilder:
     def build_message(self, free_games, premium_deals, total_checked):
         lines = []
         today = datetime.now().strftime("%m/%d")
-        lines.append(f"Steam Daily Deals - {today}")
+        lines.append("Steam Daily Deals - " + today)
         lines.append("")
         
         if free_games:
@@ -29,20 +29,19 @@ class MessageBuilder:
         if not free_games and not premium_deals:
             lines.append("No premium deals today")
             lines.append("")
-            lines.append("Filter: Discount>=50% | Price>=¥50 | Review>=80% | Reviews>=10k")
+            lines.append("Filter: Discount>=50% | Price>=$50 | Review>=80% | Reviews>=10k")
             lines.append("")
         
         lines.append("=========================")
-        lines.append(f"Checked: {total_checked} games -> Selected: {len(free_games) + len(premium_deals)} games")
+        lines.append("Checked: " + str(total_checked) + " games -> Selected: " + str(len(free_games) + len(premium_deals)) + " games")
         lines.append("More deals: https://store.steampowered.com/specials")
         
-        return "
-".join(lines)
+        return "\n".join(lines)
     
     def _format_free_game(self, game, index):
         lines = []
         name = game["name"]
-        original_price = f"¥{game['original_price'] / 100:.0f}"
+        original_price = "$" + str(game["original_price"] / 100)
         from src.game_filter import GameFilter
         expiration = GameFilter().format_expiration(game["discount_expiration"])
         appid = game["appid"]
@@ -52,22 +51,22 @@ class MessageBuilder:
         total_reviews = details.get("total_reviews", 0)
         publishers = details.get("publishers", [])
         
-        lines.append(f"{index}. {name}")
+        lines.append(str(index) + ". " + name)
         if review_pct:
-            lines.append(f"   Reviews: {review_pct}% | Count: {self._format_number(total_reviews)}")
-        lines.append(f"   {original_price} -> FREE (-100%)")
+            lines.append("   Reviews: " + str(review_pct) + "% | Count: " + self._format_number(total_reviews))
+        lines.append("   " + original_price + " -> FREE (-100%)")
         if publishers:
-            lines.append(f"   Publisher: {publishers[0]}")
-        lines.append(f"   Score: {score}")
-        lines.append(f"   Expires: {expiration}")
-        lines.append(f"   Link: https://store.steampowered.com/app/{appid}")
+            lines.append("   Publisher: " + publishers[0])
+        lines.append("   Score: " + str(score))
+        lines.append("   Expires: " + expiration)
+        lines.append("   Link: https://store.steampowered.com/app/" + str(appid))
         return lines
     
     def _format_premium_game(self, game, index):
         lines = []
         name = game["name"]
-        original_price = f"¥{game['original_price'] / 100:.0f}"
-        final_price = f"¥{game['final_price'] / 100:.0f}"
+        original_price = "$" + str(game["original_price"] / 100)
+        final_price = "$" + str(game["final_price"] / 100)
         discount = game["discount_percent"]
         from src.game_filter import GameFilter
         expiration = GameFilter().format_expiration(game["discount_expiration"])
@@ -78,19 +77,19 @@ class MessageBuilder:
         total_reviews = details.get("total_reviews", 0)
         publishers = details.get("publishers", [])
         
-        lines.append(f"{index}. {name}")
+        lines.append(str(index) + ". " + name)
         if review_pct:
-            lines.append(f"   Reviews: {review_pct}% | Count: {self._format_number(total_reviews)}")
-        lines.append(f"   {original_price} -> {final_price} (-{discount}%)")
+            lines.append("   Reviews: " + str(review_pct) + "% | Count: " + self._format_number(total_reviews))
+        lines.append("   " + original_price + " -> " + final_price + " (-" + str(discount) + "%)")
         if publishers:
-            lines.append(f"   Publisher: {publishers[0]}")
-        lines.append(f"   Score: {score}")
-        lines.append(f"   Expires: {expiration}")
-        lines.append(f"   Link: https://store.steampowered.com/app/{appid}")
+            lines.append("   Publisher: " + publishers[0])
+        lines.append("   Score: " + str(score))
+        lines.append("   Expires: " + expiration)
+        lines.append("   Link: https://store.steampowered.com/app/" + str(appid))
         return lines
     
     @staticmethod
     def _format_number(num):
         if num >= 10000:
-            return f"{num/10000:.0f}k"
+            return str(int(num/10000)) + "k"
         return str(num)
