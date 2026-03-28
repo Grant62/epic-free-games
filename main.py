@@ -23,8 +23,7 @@ def main():
         if not featured_data:
             error_msg = "Failed to fetch Steam data"
             print(error_msg)
-            wechat_sender.send_text(f"Steam deals failed
-{error_msg}")
+            wechat_sender.send_text(f"Steam deals failed - {error_msg}")
             sys.exit(1)
         
         print("Step 2: Extracting discounted games...")
@@ -63,7 +62,8 @@ def main():
         print(f"Error: {e}")
         print(error_detail)
         try:
-            WeChatSender().send_text(f"Steam deals error: {str(e)}")
+            sender = WeChatSender()
+            sender.send_text(f"Steam deals error: {str(e)}")
         except:
             pass
         sys.exit(1)
