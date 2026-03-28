@@ -1,5 +1,5 @@
 from datetime import datetime
-from config.settings import MIN_DISCOUNT_PERCENT, MIN_REVIEW_COUNT, MIN_REVIEW_SCORE
+from config.settings import MIN_REVIEW_COUNT, MIN_REVIEW_SCORE
 from src.quality_calculator import QualityCalculator
 
 class GameFilter:
@@ -7,12 +7,12 @@ class GameFilter:
         self.calculator = QualityCalculator()
     
     def extract_discount_games(self, featured_data):
-        """从所有分类中提取折扣>=25%的游戏"""
+        """提取所有打折的游戏，不限制折扣力度"""
         games = []
         if not featured_data:
             return games
         
-        # 从所有分类中提取，不只是specials
+        # 从所有分类中提取
         categories = ["specials", "top_sellers", "new_releases", "coming_soon"]
         seen_ids = set()
         
@@ -33,7 +33,7 @@ class GameFilter:
                 discount_percent = item.get("discount_percent", 0)
                 original_price = item.get("original_price", 0)
                 
-                # 只保留真正打折的游戏（有原价且现价低于原价）
+                # 只要有折扣就提取（不限制折扣力度）
                 if discount_percent > 0 and original_price > 0:
                     seen_ids.add(appid)
                     games.append({
@@ -50,7 +50,7 @@ class GameFilter:
         return games
     
     def filter_by_quality(self, games, details):
-        """按质量筛选：好评率>=80%且评测数>=1000"""
+        """按质量筛选：好评率>=75%且评测数>=500"""
         qualified = []
         for game in games:
             appid = game["appid"]
@@ -60,7 +60,7 @@ class GameFilter:
             review_score = quality_info["details"]["review_score_pct"]
             review_count = quality_info["details"]["total_reviews"]
             
-            # 硬性门槛：好评率>=80% 且 评测数>=1000
+            # 硬性门槛：好评率>=75% 且 评测数>=500
             if review_score and review_score >= MIN_REVIEW_SCORE and review_count >= MIN_REVIEW_COUNT:
                 game["review_score"] = review_score
                 game["review_count"] = review_count

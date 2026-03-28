@@ -29,15 +29,14 @@ class MessageBuilder:
         if not free_games and not premium_deals:
             lines.append("No games meet criteria today")
             lines.append("")
-            lines.append("Criteria: Discount>=25% | Review>=75% | Reviews>=500")
+            lines.append("Filter: Score>=75% | Reviews>=500 (Any discount)")
             lines.append("")
         
         lines.append("=========================")
         lines.append("Checked: " + str(total_checked) + " games | Found: " + str(len(free_games) + len(premium_deals)) + " games")
         lines.append("https://store.steampowered.com/specials")
         
-        return "
-".join(lines)
+        return "\n".join(lines)
     
     def _format_game(self, game, index, is_free=False):
         lines = []
@@ -53,9 +52,9 @@ class MessageBuilder:
         expiration = GameFilter().format_expiration(game.get("discount_expiration", 0))
         
         if is_free:
-            price_str = "$" + str(original_price / 100) + " -> FREE"
+            price_str = "$" + str(int(original_price / 100)) + " -> FREE"
         else:
-            price_str = "$" + str(original_price / 100) + " -> $" + str(final_price / 100) + " (-" + str(discount) + "%)"
+            price_str = "$" + str(int(original_price / 100)) + " -> $" + str(int(final_price / 100)) + " (-" + str(discount) + "%)"
         
         lines.append(str(index) + ". " + name)
         lines.append("   Reviews: " + str(review_score) + "% | Count: " + self._format_number(review_count))
