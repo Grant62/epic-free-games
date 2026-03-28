@@ -5,7 +5,7 @@ class WeChatSender:
     def __init__(self):
         self.webhook_url = os.environ.get("WECHAT_WEBHOOK_URL")
         if not self.webhook_url:
-            raise ValueError("环境变量 WECHAT_WEBHOOK_URL 未设置")
+            raise ValueError("Environment variable WECHAT_WEBHOOK_URL not set")
     
     def send_message(self, message):
         try:
@@ -16,13 +16,13 @@ class WeChatSender:
             response = requests.post(self.webhook_url, json=payload, timeout=30)
             result = response.json()
             if result.get("errcode") == 0:
-                print("消息推送成功")
+                print("Message sent successfully")
                 return True
             else:
-                print(f"消息推送失败：{result}")
+                print(f"Failed to send message: {result}")
                 return False
         except Exception as e:
-            print(f"消息推送异常：{e}")
+            print(f"Error sending message: {e}")
             return False
     
     def send_text(self, text):

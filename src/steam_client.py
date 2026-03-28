@@ -26,19 +26,19 @@ class SteamClient:
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
-                print(f"请求失败 (尝试 {attempt + 1}/{self.retry_times}): {e}")
+                print(f"Request failed (attempt {attempt + 1}/{self.retry_times}): {e}")
                 if attempt < self.retry_times - 1:
                     time.sleep(self.retry_delay * (attempt + 1))
         return None
     
     def get_featured_categories(self):
-        print("正在获取 Steam 精选分类数据...")
+        print("Fetching Steam featured categories...")
         url = "https://store.steampowered.com/api/featuredcategories/"
         data = self._request(url)
         if data:
-            print("成功获取数据")
+            print("Successfully fetched data")
             return data
-        print("获取精选分类数据失败")
+        print("Failed to fetch featured categories")
         return None
     
     def get_app_details(self, app_ids):
@@ -48,7 +48,7 @@ class SteamClient:
         for i in range(0, len(app_ids), self.batch_size):
             batch = app_ids[i:i + self.batch_size]
             appids_str = ",".join(str(appid) for appid in batch)
-            print(f"正在获取游戏详情: {len(batch)} 个游戏...")
+            print(f"Fetching game details: {len(batch)} games...")
             params = {"appids": appids_str, "cc": "CN", "l": "schinese",
                      "filters": "basic,price_overview,genres,reviews,publishers"}
             data = self._request("https://store.steampowered.com/api/appdetails", params)
@@ -59,5 +59,5 @@ class SteamClient:
                         results[appid] = app_data["data"]
             if i + self.batch_size < len(app_ids):
                 time.sleep(self.rate_limit)
-        print(f"成功获取 {len(results)}/{len(app_ids)} 个游戏详情")
+        print(f"Successfully fetched {len(results)}/{len(app_ids)} game details")
         return results
