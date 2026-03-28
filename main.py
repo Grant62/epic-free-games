@@ -23,7 +23,7 @@ def main():
         if not featured_data:
             error_msg = "Failed to fetch Steam data"
             print(error_msg)
-            wechat_sender.send_text(f"Steam deals failed - {error_msg}")
+            wechat_sender.send_text(f"Steam deals failed\n{error_msg}")
             sys.exit(1)
         
         print("Step 2: Extracting discounted games...")
@@ -40,8 +40,8 @@ def main():
         app_ids = [game["appid"] for game in discount_games]
         game_details = steam_client.get_app_details(app_ids)
         
-        print("Step 4: Filtering and categorizing games...")
-        free_games, premium_deals = game_filter.categorize_games(discount_games, game_details)
+        print("Step 4: Filtering by quality (review score>=80%, count>=1000)...")
+        free_games, premium_deals = game_filter.filter_by_quality(discount_games, game_details)
         
         print("Step 5: Building message...")
         message = message_builder.build_message(free_games, premium_deals, len(discount_games))

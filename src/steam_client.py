@@ -6,7 +6,7 @@ class SteamClient:
         self.timeout = 30
         self.retry_times = 3
         self.retry_delay = 2
-        self.batch_size = 50
+        self.batch_size = 10  # 减少到10个，避免400错误
         self.rate_limit = 1.5
         self.last_request_time = 0
     
@@ -45,19 +45,35 @@ class SteamClient:
         if not app_ids:
             return {}
         results = {}
+        failed_count = 0
+        
         for i in range(0, len(app_ids), self.batch_size):
             batch = app_ids[i:i + self.batch_size]
             appids_str = ",".join(str(appid) for appid in batch)
-            print(f"Fetching game details: {len(batch)} games...")
-            params = {"appids": appids_str, "cc": "CN", "l": "schinese",
-                     "filters": "basic,price_overview,genres,reviews,publishers"}
+            print(f"Fetching game details batch {i//self.batch_size + 1}: {len(batch)} games...")
+            
+            params = {
+                "appids": appids_str,
+                "cc": "CN",
+                "l": "schinese",
+                "filters": "basic,reviews,publishers"
+            }
+            
             data = self._request("https://store.steampowered.com/api/appdetails", params)
+            
             if data:
                 for appid_str, app_data in data.items():
                     appid = int(appid_str)
                     if app_data.get("success") and app_data.get("data"):
                         results[appid] = app_data["data"]
+                    else:
+                        failed_count += 1
+            else:
+                failed_count += len(batch)
+                print(f"Warning: Failed to fetch batch, skipping {len(batch)} games")
+            
             if i + self.batch_size < len(app_ids):
                 time.sleep(self.rate_limit)
-        print(f"Successfully fetched {len(results)}/{len(app_ids)} game details")
+        
+        print(f"Successfully fetched {len(results)}/{len(app_ids)} game details ({failed_count} failed)")
         return results
