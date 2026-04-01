@@ -1,5 +1,5 @@
-import re
 from datetime import datetime
+import re
 
 class GameFilter:
     """游戏筛选器 - 选出最好的3款"""
@@ -28,7 +28,6 @@ class GameFilter:
                 discount_percent = item.get("discount_percent", 0)
                 original_price = item.get("original_price", 0)
                 
-                # 只要有折扣就收录
                 if discount_percent > 0 and original_price > 0:
                     seen_ids.add(appid)
                     games.append({
@@ -49,24 +48,20 @@ class GameFilter:
         if not games:
             return [], []
         
-        # 给每个游戏打分
         scored_games = []
         for game in games:
             appid = game["appid"]
             game_detail = details.get(appid, {})
             
-            # 获取评价信息
             reviews = game_detail.get("reviews", {})
             review_summary = reviews.get("review_summary", "")
             
-            # 解析好评率
             review_score = 0
             if review_summary:
                 match = re.search(r'(\d+)%', review_summary)
                 if match:
                     review_score = int(match.group(1))
             
-            # 解析评测数
             total_reviews = 0
             if review_summary:
                 match = re.search(r'([\d,]+) user reviews', review_summary)
@@ -76,14 +71,8 @@ class GameFilter:
                 recommendations = game_detail.get("recommendations", {})
                 total_reviews = recommendations.get("total", 0)
             
-            # 计算综合分数（热度分）
-            # 评测数越多越热门，好评率越高质量越好
             heat_score = total_reviews * (review_score / 100) if review_score > 0 else total_reviews * 0.5
-            
-            # 折扣加分（折扣大的优先）
             discount_bonus = game["discount_percent"] * 100
-            
-            # 最终分数
             final_score = heat_score + discount_bonus
             
             game["review_score"] = review_score if review_score > 0 else "未知"
@@ -92,21 +81,21 @@ class GameFilter:
             
             scored_games.append(game)
         
-        # 按分数排序
         scored_games.sort(key=lambda x: x["final_score"], reverse=True)
-        
-        # 取前3名
         top_games = scored_games[:3]
         
-        # 分离免费和付费
         free_games = [g for g in top_games if g["discount_percent"] == 100]
         paid_games = [g for g in top_games if g["discount_percent"] < 100]
         
         print(f"选出最好的 {len(top_games)} 款游戏")
         for i, g in enumerate(top_games, 1):
-            print(f"  {i}. {g['name']} (评分:{g['review_score']} 评测:{g['review_count']} 折扣:{g['discount_percent']}%)")
+            print(f"  {i}. {g['name']} (评分:{g['review_score']} 评测:{g['review_count']})")
         
         return free_games, paid_games
+    
+    def filter_by_quality(self, games, details):
+        """兼容旧代码的方法"""
+        return self.select_best_games(games, details)
     
     def format_expiration(self, timestamp):
         """格式化截止时间"""
