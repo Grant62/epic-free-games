@@ -9,9 +9,13 @@ class SteamClient:
         self.timeout = 30
         self.retry_times = 3
         self.retry_delay = 2
-        self.batch_size = 10
-        self.rate_limit = 1.0
+        self.batch_size = 5  # 减少到5个
+        self.rate_limit = 2.0  # 增加到2秒
         self.last_request_time = 0
+        self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
     
     def _rate_limit_wait(self):
         current_time = time.time()
@@ -24,14 +28,7 @@ class SteamClient:
         for attempt in range(self.retry_times):
             try:
                 self._rate_limit_wait()
-                response = requests.get(
-                    url, 
-                    params=params, 
-                    timeout=self.timeout,
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    }
-                )
+                response = self.session.get(url, params=params, timeout=self.timeout)
                 response.raise_for_status()
                 return response.json()
             except Exception as e:
@@ -43,38 +40,34 @@ class SteamClient:
         return None
     
     def get_featured_categories(self) -> Optional[Dict]:
-        """获取Steam精选分类数据（包含折扣游戏）"""
         print("正在获取Steam精选折扣游戏...")
         url = "https://store.steampowered.com/api/featuredcategories/"
         data = self._request(url)
         if data:
-            # 计算总共有多少个游戏
-            total_games = 0
+            total = 0
             for key in ["specials", "top_sellers", "new_releases", "coming_soon"]:
                 if key in data and "items" in data[key]:
-                    total_games += len(data[key]["items"])
-            print(f"✅ 成功获取数据，共 {total_games} 个游戏")
+                    total += len(data[key]["items"])
+            print(f"✅ 成功获取数据，共 {total} 个游戏")
             return data
-        else:
-            print("❌ 获取数据失败")
-            return None
+        print("❌ 获取数据失败")
+        return None
     
     def get_app_details(self, app_ids: List[int]) -> Dict[int, Dict]:
-        """批量获取游戏详情"""
+        """批量获取游戏详情 - 单个获取避免400错误"""
         if not app_ids:
             return {}
         
         results = {}
-        failed_count = 0
+        failed = []
         
-        for i in range(0, len(app_ids), self.batch_size):
-            batch = app_ids[i:i + self.batch_size]
-            appids_str = ",".join(str(appid) for appid in batch)
-            
-            print(f"正在获取游戏详情 ({i+1}-{min(i+self.batch_size, len(app_ids))}/{len(app_ids)})...")
+        print(f"正在逐个获取 {len(app_ids)} 个游戏详情...")
+        
+        for i, appid in enumerate(app_ids):
+            print(f"  获取 {i+1}/{len(app_ids)}: appid={appid}")
             
             params = {
-                "appids": appids_str,
+                "appids": appid,
                 "cc": "CN",
                 "l": "schinese",
                 "filters": "basic,reviews"
@@ -82,19 +75,16 @@ class SteamClient:
             
             data = self._request("https://store.steampowered.com/api/appdetails", params)
             
-            if data:
-                for appid_str, app_data in data.items():
-                    appid = int(appid_str)
-                    if app_data.get("success") and app_data.get("data"):
-                        results[appid] = app_data["data"]
-                    else:
-                        failed_count += 1
+            if data and str(appid) in data:
+                app_data = data[str(appid)]
+                if app_data.get("success") and app_data.get("data"):
+                    results[appid] = app_data["data"]
+                else:
+                    failed.append(appid)
             else:
-                failed_count += len(batch)
-                print(f"⚠️ 批次获取失败，跳过 {len(batch)} 个游戏")
+                failed.append(appid)
             
-            if i + self.batch_size < len(app_ids):
-                time.sleep(self.rate_limit)
+            time.sleep(self.rate_limit)
         
-        print(f"✅ 成功获取 {len(results)}/{len(app_ids)} 个游戏详情 ({failed_count} 个失败)")
+        print(f"✅ 成功获取 {len(results)}/{len(app_ids)} 个游戏详情 ({len(failed)} 个失败)")
         return results
