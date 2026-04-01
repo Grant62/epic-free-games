@@ -53,11 +53,11 @@ class GameFilter:
             appid = game["appid"]
             game_detail = details.get(appid, {})
             
-           reviews = game_detail.get("reviews", {})
-           if isinstance(reviews, dict):
-               review_summary = reviews.get("review_summary", "")
-           else:
-               review_summary = str(reviews) if reviews else ""
+            reviews = game_detail.get("reviews", {})
+            if isinstance(reviews, dict):
+                review_summary = reviews.get("review_summary", "")
+            else:
+                review_summary = str(reviews) if reviews else ""
             
             review_score = 0
             if review_summary:
