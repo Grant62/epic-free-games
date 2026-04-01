@@ -2,7 +2,7 @@ from datetime import datetime
 import re
 
 class GameFilter:
-    """游戏筛选器 - 选出最好的3款"""
+    """游戏筛选器 - 选出最好的12款（无门槛）"""
     
     def extract_discount_games(self, featured_data):
         """提取所有打折游戏"""
@@ -44,7 +44,7 @@ class GameFilter:
         return games
     
     def select_best_games(self, games, details):
-        """选出最好的3款游戏"""
+        """选出最好的12款游戏 - 无门槛，只看热度"""
         if not games:
             return [], []
         
@@ -82,7 +82,7 @@ class GameFilter:
             scored_games.append(game)
         
         scored_games.sort(key=lambda x: x["final_score"], reverse=True)
-        top_games = scored_games[:3]
+        top_games = scored_games[:12]
         
         free_games = [g for g in top_games if g["discount_percent"] == 100]
         paid_games = [g for g in top_games if g["discount_percent"] < 100]
